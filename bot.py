@@ -8,9 +8,10 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 import re
 
-# تحميل المتغيرات من ملف .env
+# تحميل المتغيرات
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))  # ID المشرف
 
 # إنشاء البوت
 bot = Bot(token=BOT_TOKEN)
@@ -84,9 +85,50 @@ async def handle_url(message: types.Message):
         if file_path.exists():
             file_path.unlink()
 
+# ==================== أوامر المشرف ====================
+
+@dp.message(Command("admin"))
+async def cmd_admin(message: types.Message):
+    """التحقق من أن المستخدم مشرف"""
+    if message.from_user.id == ADMIN_ID:
+        await message.answer(
+            "👤 لوحة تحكم المشرف\n\n"
+            "الأوامر المتاحة:\n"
+            "/stats - إحصائيات البوت\n"
+            "/broadcast - إرسال إشعار للجميع (قريباً)\n"
+            "/ping - اختبار البوت"
+        )
+    else:
+        await message.answer("⛔ ليس لديك صلاحيات المشرف!")
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    """إحصائيات بسيطة"""
+    if message.from_user.id == ADMIN_ID:
+        await message.answer(f"📊 إحصائيات البوت:\n\n"
+                           f"✅ البوت يعمل منذ: {__import__('datetime').datetime.now()}\n"
+                           f"🔗 المستودع: github.com/fednydz/tiktok-bot")
+    else:
+        await message.answer("⛔ ليس لديك صلاحيات المشرف!")
+
+@dp.message(Command("ping"))
+async def cmd_ping(message: types.Message):
+    """اختبار سرعة البوت"""
+    if message.from_user.id == ADMIN_ID:
+        import time
+        start = time.time()
+        msg = await message.answer("🏓 Pong!")
+        end = time.time()
+        await msg.edit_text(f"🏓 Pong! ({int((end-start)*1000)}ms)")
+    else:
+        await message.answer("⛔ ليس لديك صلاحيات المشرف!")
+
+# =====================================================
+
 # تشغيل البوت
 async def main():
     print("✅ البوت يعمل الآن...")
+    print(f"👤 Admin ID: {ADMIN_ID}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
