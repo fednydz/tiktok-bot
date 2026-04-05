@@ -50,7 +50,7 @@ async def cmd_start(message: types.Message):
     await message.answer(
         "👋 أهلاً بك!\n\n"
         "أرسل لي رابط فيديو تيك توك وسأقوم بتحميله بدون علامة مائية.\n\n"
-        "📌 مثال: https://vm.tiktok.com/xxxxx/"
+        "📌 مثال: https://vm-tiktok-com/xxxxx/"
     )
 
 # معالجة الروابط
