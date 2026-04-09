@@ -17,11 +17,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# === أنماط الروابط ===
+# === أنماط الروابط (مصححة) ===
 TIKTOK_REGEX = re.compile(r"https?://(?:www\.)?(?:tiktok\.com/[@\w.-]+/video/|vm\.tiktok\.com/|vt\.tiktok\.com/)(\w+)")
 YOUTUBE_REGEX = re.compile(r"https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)([\w-]+)")
 INSTAGRAM_REGEX = re.compile(r"https?://(?:www\.)?instagram\.com/(?:p|reel|tv)/([\w-]+)")
-FACEBOOK_REGEX = re.compile(r"https?://(?:www\.)?(?:facebook\.com/(?:reel|watch|videos?/)|fb\.watch/)([\w-./?=&]+)")
+FACEBOOK_REGEX = re.compile(r"https?://(?:www\.)?(?:facebook\.com/(?:reel|watch|videos?/)|fb\.watch/)([\w./?=&-]+)")
 
 # === دوال استخراج الروابط ===
 def extract_url(url: str, platform: str) -> str | None:
@@ -121,7 +121,6 @@ async def handle_url(message: types.Message):
         )
         return
 
-    # أسماء المنصات للعرض
     platform_names = {
         "tiktok": "🎵 تيك توك",
         "youtube": "📺 يوتيوب",
@@ -131,7 +130,6 @@ async def handle_url(message: types.Message):
 
     msg = await message.answer(f"⏳ جاري تحميل الفيديو من {platform_names[platform]}...")
     
-    # التحميل في thread منفصل
     file_path, info = await asyncio.to_thread(download_video, url, platform)
     
     if not file_path or not file_path.exists():
@@ -139,12 +137,10 @@ async def handle_url(message: types.Message):
         return
 
     try:
-        # تحضير الكابشن
         caption = f"✅ تم التحميل بنجاح!\n📌 {info['title']}"
         if info['uploader']:
             caption += f"\n👤 {info['uploader']}"
         
-        # إرسال الفيديو
         video = FSInputFile(file_path)
         await message.reply_video(video, caption=caption)
         await msg.delete()
@@ -152,7 +148,6 @@ async def handle_url(message: types.Message):
     except Exception as e:
         await msg.edit_text(f"⚠️ خطأ في الإرسال: {e}")
     finally:
-        # تنظيف الملف المؤقت
         if file_path and file_path.exists():
             try:
                 file_path.unlink()
