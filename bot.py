@@ -39,7 +39,6 @@ def split_video(file_path: Path, chunk_duration: int = 90) -> list[Path]:
             clip = video.subclip(start_time, end_time)
             chunk_path = output_dir / f"{file_path.stem}_part{i+1}.mp4"
             
-            # كتابة الملف بصيغة متوافقة مع تيليجرام
             clip.write_videofile(
                 str(chunk_path), 
                 codec="libx264", 
@@ -62,30 +61,27 @@ async def cmd_start(message: types.Message):
     await message.answer(
         "👋 أهلاً بك في بوت تقسيم الفيديو!\n\n"
         "📤 أرسل لي أي فيديو وسأقوم بتقسيمه إلى أجزاء مدة كل جزء 1:30 دقيقة.\n\n"
-        "⚠️ ملاحظة: الحد الأقصى لحجم الملف المرفوع هو 50MB (للمستخدمين العاديين)."
+        "⚠️ ملاحظة: يجب أن يكون طول الفيديو **أكبر من دقيقتين** ليتم تقسيمه."
     )
 
 # === معالجة رفع الفيديو ===
 @dp.message(F.video | F.document)
 async def handle_video_upload(message: types.Message):
-    # تحديد نوع الملف (فيديو مباشر أو ملف وثيقة يحتوي على فيديو)
     file_obj = message.video or message.document
     
-    # التأكد أن الملف فيديو (بامتداد mp4 أو mkv أو webm)
+    # التأكد أن الملف فيديو
     if file_obj.mime_type and 'video' not in file_obj.mime_type:
-        # إذا كان document، نتحقق من الامتداد يدوياً إذا أمكن
         if message.document and not message.document.file_name.lower().endswith(('.mp4', '.mkv', '.webm')):
              await message.reply("❌ يرجى إرسال ملف فيديو فقط (.mp4, .mkv, .webm).")
              return
 
-    msg = await message.reply("⏳ جاري تحميل الفيديو...")
+    msg = await message.reply("⏳ جاري فحص الفيديو...")
     
     try:
         # 1. تحميل الملف من تيليجرام
         file_info = await bot.get_file(file_obj.file_id)
         downloaded_file = await bot.download_file(file_info.file_path)
         
-        # حفظ الملف مؤقتاً
         temp_dir = Path("temp_uploads")
         temp_dir.mkdir(exist_ok=True)
         original_filename = file_obj.file_name or f"video_{message.from_user.id}.mp4"
@@ -94,32 +90,48 @@ async def handle_video_upload(message: types.Message):
         with open(local_path, 'wb') as new_file:
             new_file.write(downloaded_file.read())
             
-        await msg.edit_text("✅ تم التحميل. جاري تقسيم الفيديو إلى أجزاء (1:30)...")
+        # 2. فحص مدة الفيديو باستخدام moviepy
+        await msg.edit_text("⏳ جاري التحقق من مدة الفيديو...")
+        video_check = VideoFileClip(str(local_path))
+        duration = video_check.duration
+        video_check.close()
         
-        # 2. تقسيم الفيديو
+        # ✅ الشرط المطلوب: إذا كان أقل من 120 ثانية (دقيقتين)
+        if duration < 120:
+            await msg.edit_text(
+                f"❌ عذراً، لا يمكن تقسيم هذا الفيديو.\n"
+                f" مدة الفيديو الحالية: {int(duration)} ثانية.\n"
+                f"📏 الحد الأدنى المطلوب للتقسيم: **120 ثانية (دقيقتين)**."
+            )
+            # حذف الملف المؤقت والعودة
+            local_path.unlink()
+            return
+
+        await msg.edit_text(f"✅ مدة الفيديو: {int(duration)} ثانية. جاري التقسيم إلى أجزاء (1:30)...")
+        
+        # 3. تقسيم الفيديو
         parts = await asyncio.to_thread(split_video, local_path, chunk_duration=90)
         
         if not parts:
-            await msg.edit_text("❌ فشل في تقسيم الفيديو. تأكد أن الملف صالح.")
+            await msg.edit_text("❌ فشل في تقسيم الفيديو.")
+            local_path.unlink()
             return
         
-        # 3. إرسال الأجزاء
+        # 4. إرسال الأجزاء
         await msg.edit_text(f"📦 جاري إرسال {len(parts)} أجزاء...")
         
         for i, part_path in enumerate(parts):
             part_caption = f"الجزء {i+1}/{len(parts)}"
             video_file = FSInputFile(part_path)
             
-            # إرسال كـ Video لضمان التشغيل المباشر
             await message.reply_video(video_file, caption=part_caption)
             
-            # حذف الجزء المؤقت
             try:
                 part_path.unlink()
             except:
                 pass
         
-        await msg.delete() # حذف رسالة الحالة
+        await msg.delete()
         
     except Exception as e:
         await msg.edit_text(f"⚠️ حدث خطأ: {e}")
